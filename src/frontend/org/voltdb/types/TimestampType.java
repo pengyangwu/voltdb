@@ -124,6 +124,14 @@ public class TimestampType implements JSONString, Comparable<TimestampType> {
     }
 
     /**
+     * Get the total number of microseconds since the UNIX epoch for this timestamp
+     * @return the total number of microseconds since the UNIX epoch for this timestamp
+     */
+    public long getUSecSinceEpoch() {
+        return m_date.getTime() * 1000 + m_usecs;
+    }
+
+    /**
      * Equality.
      * @return true if equal.
      */
