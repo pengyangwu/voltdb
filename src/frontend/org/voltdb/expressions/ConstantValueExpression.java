@@ -38,11 +38,6 @@ public class ConstantValueExpression extends AbstractValueExpression {
         ISNULL;
     }
 
-    // These must match constants in ee/expressions/dateconstants.h
-    // These are min and max valid timestamps in microseconds before or since the UNIX epoch.
-    private static final long GREGORIAN_EPOCH = -12212553600000000L;  //  1583-01-01 00:00:00
-    private static final long NYE9999          = 253402300799999999L; //  9999-12-31 23:59:59.999999
-
     protected String m_value = null;
     protected boolean m_isNull = true;
 
@@ -320,17 +315,7 @@ public class ConstantValueExpression extends AbstractValueExpression {
                 }
                 // It couldn't be converted to timestamp.
                 catch (IllegalArgumentException e) {
-                    throw new PlanningErrorException("Value (" + getValue() +
-                                                     ") has an invalid format for a constant " +
-                                                     neededType.toSQLString() + " value");
-
-                }
-
-                if (ts.getUSecSinceEpoch() < GREGORIAN_EPOCH || ts.getUSecSinceEpoch() > NYE9999) {
-                    TimestampType minTS = new TimestampType(GREGORIAN_EPOCH);
-                    TimestampType maxTS = new TimestampType(NYE9999);
-                    throw new PlanningErrorException("Timestamp constant is outside of the supported range (" + minTS + " to " + maxTS + ").");
-
+                    throw new PlanningErrorException(e.getMessage());
                 }
 
                 m_value = String.valueOf(ts.getTime());

@@ -19,6 +19,7 @@ package org.voltdb.types;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.TimeZone;
 
 import org.json_voltpatches.JSONString;
 import org.voltdb.common.Constants;
@@ -27,11 +28,29 @@ import org.voltdb.common.Constants;
  * Represent a microsecond-accurate VoltDB timestamp type.
  */
 public class TimestampType implements JSONString, Comparable<TimestampType> {
+
+    private static final long GREGORIAN_EPOCH = -12212553600000000L;  //  1583-01-01 00:00:00
+    private static final long NYE9999          = 253402300799999999L; //  9999-12-31 23:59:59.999999
+
+    public static final TimestampType MIN_VALID_TIMESTAMP = new TimestampType(GREGORIAN_EPOCH);
+    public static final TimestampType MAX_VALID_TIMESTAMP = new TimestampType(NYE9999);
+
+    private static final String OUT_OF_RANGE_ERROR_MSG = "Requested timestamp value is outside of the supported range "
+            + "(" + MIN_VALID_TIMESTAMP + " to " + MAX_VALID_TIMESTAMP + ").";
+
+    private static void validateRange(long usecSinceEpoch) {
+        if (usecSinceEpoch < GREGORIAN_EPOCH || usecSinceEpoch > NYE9999) {
+            throw new IllegalArgumentException(OUT_OF_RANGE_ERROR_MSG);
+        }
+    }
+
     /**
      * Create a TimestampType from microseconds from epoch.
      * @param timestamp microseconds since epoch.
      */
     public TimestampType(long timestamp) {
+        validateRange(timestamp);
+
         m_usecs = (short) (timestamp % 1000);
         long millis = (timestamp - m_usecs) / 1000;
         m_date = new Date(millis);
@@ -43,6 +62,7 @@ public class TimestampType implements JSONString, Comparable<TimestampType> {
      * @param date Java Date instance.
      */
     public TimestampType(Date date) {
+        validateRange(date.getTime() * 1000);
         m_usecs = 0;
         m_date = (Date) date.clone();
     }
@@ -150,12 +170,7 @@ public class TimestampType implements JSONString, Comparable<TimestampType> {
         return true;
     }
 
-    /**
-     * toString for debugging and printing VoltTables
-     */
-    @Override
-    public String toString() {
-        SimpleDateFormat sdf = new SimpleDateFormat(Constants.ODBC_DATE_FORMAT_STRING);
+    private String toString(SimpleDateFormat formatter) {
         Date dateToMillis = (Date) m_date.clone(); // deep copy as we change it later
         short usecs = m_usecs;
         if (usecs < 0) {
@@ -166,9 +181,25 @@ public class TimestampType implements JSONString, Comparable<TimestampType> {
             usecs += 1000;
         }
         assert(usecs >= 0);
-        String format = sdf.format(dateToMillis);
+        String format = formatter.format(dateToMillis);
         // zero-pad so 1 or 2 digit usecs get appended correctly
         return format + String.format("%03d", usecs);
+    }
+
+    /**
+     * toString for debugging and printing VoltTables
+     */
+    @Override
+    public String toString() {
+        SimpleDateFormat sdf = new SimpleDateFormat(Constants.ODBC_DATE_FORMAT_STRING);
+        return toString(sdf);
+    }
+
+    public String toStringGMT() {
+        SimpleDateFormat sdf = new SimpleDateFormat(Constants.ODBC_DATE_FORMAT_STRING);
+        sdf.setTimeZone(TimeZone.getTimeZone("GMT+00:00"));
+        return toString(sdf);
+
     }
 
     /**
