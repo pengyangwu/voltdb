@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import org.voltcore.utils.CoreUtils;
 import org.voltdb.ClientResponseImpl;
@@ -690,6 +691,7 @@ public final class ClientImpl implements Client {
         String m_hostName;
         int m_clientPort;
         int m_adminPort;
+        boolean m_initialized = false;
         void setValue(String param, String value) {
             if ("IPADDRESS".equalsIgnoreCase(param)) {
                 m_ipAddress = value;
@@ -699,6 +701,8 @@ public final class ClientImpl implements Client {
                 m_clientPort = Integer.parseInt(value);
             } else if ("ADMINPORT".equalsIgnoreCase(param)) {
                 m_adminPort = Integer.parseInt(value);
+            } else if ("INITIALIZED".equalsIgnoreCase(param)) {
+                m_initialized = "true".equalsIgnoreCase(value);
             }
         }
 
@@ -780,7 +784,10 @@ public final class ClientImpl implements Client {
                 m_useAdminPort = (admintPortCount == connectedMap.values().size());
             }
             m_adminPortChecked = true;
-            return unconnectedMap;
+
+            //exclude those hosts which are not done initialization.
+            return unconnectedMap.entrySet().stream().filter(map -> map.getValue().m_initialized == true)
+                    .collect(Collectors.toMap(p -> p.getKey(), p -> p.getValue()));
         }
 
         /**
