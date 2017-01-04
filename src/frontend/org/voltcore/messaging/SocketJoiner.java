@@ -201,6 +201,7 @@ public class SocketJoiner {
              */
             long retryInterval = RETRY_INTERVAL;
             final Random salt = new Random();
+            final long maxWait = 120;
             while (true) {
                 try {
                     connectToPrimary(ip, ConnectStrategy.PROBE);
@@ -212,9 +213,15 @@ public class SocketJoiner {
                         Thread.sleep(TimeUnit.SECONDS.toMillis(retryInterval));
                     } catch (InterruptedException ignoreIt) {
                     }
-                    // exponential back off with a salt to avoid collision. Max is 5 minutes.
-                    retryInterval = (Math.min(retryInterval * 2, TimeUnit.MINUTES.toSeconds(5)) +
-                                     salt.nextInt(RETRY_INTERVAL_SALT));
+
+                    //exponential back off with a salt to avoid collision. Max is 2 minutes.
+                    //For simultaneous multiple node rejoining, exponential back-off can be too much.
+                    //All later rejoining hosts may wait for (maxWait + salt) seconds without sending another request even through
+                    //previous node has finished rejoining.
+                    retryInterval = Math.min(retryInterval * 2, maxWait) + salt.nextInt(RETRY_INTERVAL_SALT);
+                    if (retryInterval > maxWait) {
+                        retryInterval = RETRY_INTERVAL;
+                    }
                 } catch (Exception e) {
                     hostLog.error("Failed to establish socket mesh.", e);
                     throw new RuntimeException("Failed to establish socket mesh with " + m_coordIp, e);
