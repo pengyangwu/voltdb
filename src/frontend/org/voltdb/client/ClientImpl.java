@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 import org.voltcore.utils.CoreUtils;
 import org.voltdb.ClientResponseImpl;
@@ -784,10 +783,7 @@ public final class ClientImpl implements Client {
                 m_useAdminPort = (admintPortCount == connectedMap.values().size());
             }
             m_adminPortChecked = true;
-
-            //exclude those hosts which are not done initialization.
-            return unconnectedMap.entrySet().stream().filter(map -> map.getValue().m_initialized == true)
-                    .collect(Collectors.toMap(p -> p.getKey(), p -> p.getValue()));
+            return unconnectedMap;
         }
 
         /**
@@ -840,12 +836,14 @@ public final class ClientImpl implements Client {
                     Map<Integer, HostConfig> hosts = listener.buildUnconnectedHostConfigMap(resp.getResults()[0]);
                     for(Map.Entry<Integer, HostConfig> entry : hosts.entrySet()) {
                         HostConfig config = entry.getValue();
-                        try {
-                            createConnection(config.m_ipAddress,config.getPort(listener.m_useAdminPort));
-                            listener.nofifyClientConnectionCreation(config, ClientStatusListenerExt.AutoConnectionStatus.SUCCESS);
-                        } catch (Exception e) {
-                            listener.nofifyClientConnectionCreation(config, ClientStatusListenerExt.AutoConnectionStatus.UNABLE_TO_CONNECT);
-                            failCount++;
+                        if (config.m_initialized) {
+                            try {
+                                createConnection(config.m_ipAddress,config.getPort(listener.m_useAdminPort));
+                                listener.nofifyClientConnectionCreation(config, ClientStatusListenerExt.AutoConnectionStatus.SUCCESS);
+                            } catch (Exception e) {
+                                listener.nofifyClientConnectionCreation(config, ClientStatusListenerExt.AutoConnectionStatus.UNABLE_TO_CONNECT);
+                                failCount++;
+                            }
                         }
                     }
                 } else {
