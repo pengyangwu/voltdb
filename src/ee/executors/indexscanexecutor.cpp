@@ -221,9 +221,10 @@ bool IndexScanExecutor::p_execute(const NValueArray &params)
 
     for (int ctr = 0; ctr < activeNumOfSearchKeys; ctr++) {
         NValue candidateValue = m_searchKeyArray[ctr]->eval(NULL, NULL);
-        if (candidateValue.isNull()) {
+        if (candidateValue.isNull() && localLookupType != INDEX_LOOKUP_TYPE_NOT_DISTINCT) {
             // when any part of the search key is NULL, the result is false when it compares to anything.
             // do early return optimization, our index comparator may not handle null comparison correctly.
+            // The only exception here is "NOT DISTINCT"
             earlyReturnForSearchKeyOutOfRange = true;
             break;
         }
@@ -248,7 +249,8 @@ bool IndexScanExecutor::p_execute(const NValueArray &params)
             // comparison is the only place where the executor might return matching tuples
             // e.g. TINYINT < 1000 should return all values
             if ((localLookupType != INDEX_LOOKUP_TYPE_EQ) &&
-                    (ctr == (activeNumOfSearchKeys - 1))) {
+                (localLookupType != INDEX_LOOKUP_TYPE_NOT_DISTINCT) &&
+                (ctr == (activeNumOfSearchKeys - 1))) {
 
                 if (e.getInternalFlags() & SQLException::TYPE_OVERFLOW) {
                     if ((localLookupType == INDEX_LOOKUP_TYPE_GT) ||
@@ -376,7 +378,8 @@ bool IndexScanExecutor::p_execute(const NValueArray &params)
         VOLT_TRACE("INDEX_LOOKUP_TYPE(%d) m_numSearchkeys(%d) key:%s",
                 localLookupType, activeNumOfSearchKeys, searchKey.debugNoHeader().c_str());
 
-        if (localLookupType == INDEX_LOOKUP_TYPE_EQ) {
+        if (localLookupType == INDEX_LOOKUP_TYPE_EQ ||
+            localLookupType == INDEX_LOOKUP_TYPE_NOT_DISTINCT) {
             tableIndex->moveToKey(&searchKey, indexCursor);
         }
         else if (localLookupType == INDEX_LOOKUP_TYPE_GT) {

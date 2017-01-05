@@ -314,9 +314,10 @@ bool NestLoopIndexExecutor::p_execute(const NValueArray &params)
                 // in a normal index scan, params would be substituted here,
                 // but this scan fills in params outside the loop
                 NValue candidateValue = m_indexNode->getSearchKeyExpressions()[ctr]->eval(&outer_tuple, NULL);
-                if (candidateValue.isNull()) {
+                if (candidateValue.isNull() && localLookupType != INDEX_LOOKUP_TYPE_NOT_DISTINCT) {
                     // when any part of the search key is NULL, the result is false when it compares to anything.
                     // do early return optimization, our index comparator may not handle null comparison correctly.
+                    // The only exception here is "NOT DISTINCT"
                     keyException = true;
                     break;
                 }
@@ -338,6 +339,7 @@ bool NestLoopIndexExecutor::p_execute(const NValueArray &params)
                     // comparison is the only place where the executor might return matching tuples
                     // e.g. TINYINT < 1000 should return all values
                     if ((localLookupType != INDEX_LOOKUP_TYPE_EQ) &&
+                        (localLookupType != INDEX_LOOKUP_TYPE_NOT_DISTINCT) &&
                         (ctr == (activeNumOfSearchKeys - 1))) {
 
                         if (e.getInternalFlags() & SQLException::TYPE_OVERFLOW) {
@@ -423,7 +425,8 @@ bool NestLoopIndexExecutor::p_execute(const NValueArray &params)
                 // Essentially cut and pasted this if ladder from
                 // index scan executor
                 if (num_of_searchkeys > 0) {
-                    if (localLookupType == INDEX_LOOKUP_TYPE_EQ) {
+                    if (localLookupType == INDEX_LOOKUP_TYPE_EQ ||
+                        localLookupType == INDEX_LOOKUP_TYPE_NOT_DISTINCT) {
                         index->moveToKey(&index_values, indexCursor);
                     }
                     else if (localLookupType == INDEX_LOOKUP_TYPE_GT) {
