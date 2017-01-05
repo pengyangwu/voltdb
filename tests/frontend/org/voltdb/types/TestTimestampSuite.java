@@ -74,16 +74,25 @@ public class TestTimestampSuite {
         return localFormatter.format(d);
     }
 
-    private void expectOutOfRangeException(String str) throws ParseException {
+    private void expectException(String dateStr, String expectedMsg) throws ParseException {
         boolean threw = false;
         try {
-            new TimestampType(gmtToLocal(str));
+            new TimestampType(gmtToLocal(dateStr));
         }
         catch (IllegalArgumentException iae) {
             threw = true;
-            assertTrue(iae.getMessage().contains("timestamp value is outside of the supported range"));
+            String actualMsg = iae.getMessage();
+            assertTrue("expected: " + expectedMsg + ", actual: " + actualMsg,
+                        actualMsg.contains(expectedMsg));
         }
         assertTrue(threw);
+    }
+
+    // Difference from UTC in milliseconds
+    private int localTimeZoneOffset() {
+        SimpleDateFormat sdf = new SimpleDateFormat();
+        int rawOffset = sdf.getTimeZone().getRawOffset();
+        return rawOffset;
     }
 
     @Test
@@ -94,9 +103,22 @@ public class TestTimestampSuite {
 
         assertEquals(GREGORIAN_EPOCH, new TimestampType(gmtToLocal(MIN_STRING)).getUSecSinceEpoch());
         assertEquals(0, new TimestampType(gmtToLocal(UNIX_EPOCH)).getUSecSinceEpoch());
-        assertEquals(NYE9999 - 999, new TimestampType(gmtToLocal(maxStrMillis)).getUSecSinceEpoch());
 
-        expectOutOfRangeException("1582-12-31 23:59:59.999");
-        expectOutOfRangeException("10000-01-01 00:00:00.000");
+        if (localTimeZoneOffset() <= 0) {
+            assertEquals(NYE9999 - 999, new TimestampType(gmtToLocal(maxStrMillis)).getUSecSinceEpoch());
+        }
+        else {
+            // Converting upper bound to a local time zone when East of UTC
+            // would create a 5-digit year, which Java date string conversion cannot handle.
+            expectException("10000-01-01 00:00:00.000", "Timestamp format must be yyyy-mm-dd");
+        }
+
+        expectException("1582-12-31 23:59:59.999", "timestamp value is outside of the supported range");
+
+        if (localTimeZoneOffset() <= 0) {
+            // East of UTC we'll see the formatting exception that we got above.
+            expectException("10000-01-01 00:00:00.000", "timestamp value is outside of the supported range");
+        }
+
     }
 }
