@@ -83,7 +83,7 @@ public class ImportManager implements ChannelChangeCallback {
     private void initializeChannelDistributer() throws BundleException {
         if (m_distributer != null) return;
 
-        m_distributer = new ChannelDistributer(m_messenger.getZK(), String.valueOf(m_myHostId));
+        m_distributer = new ChannelDistributerImpl(m_messenger.getZK(), String.valueOf(m_myHostId));
         m_distributer.registerCallback("__IMPORT_MANAGER__", this);
     }
 

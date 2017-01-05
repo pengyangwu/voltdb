@@ -126,6 +126,7 @@ import org.voltdb.compiler.deploymentfile.UsersType;
 import org.voltdb.export.ExportDataProcessor;
 import org.voltdb.export.ExportManager;
 import org.voltdb.expressions.AbstractExpression;
+import org.voltdb.importer.DummyChannelDistributer;
 import org.voltdb.importer.ImportDataProcessor;
 import org.voltdb.importer.formatter.AbstractFormatterFactory;
 import org.voltdb.importer.formatter.FormatterBuilder;
@@ -701,7 +702,7 @@ public abstract class CatalogUtil {
 
     private static void validateResourceMonitorInfo(DeploymentType deployment) {
         // call resource monitor ctor so that it does all validations.
-        new ResourceUsageMonitor(deployment.getSystemsettings(), new DummySnmpTrapSender(), null, false);
+        new ResourceUsageMonitor(deployment.getSystemsettings(), new DummySnmpTrapSender(), new DummyChannelDistributer(), false);
     }
 
 

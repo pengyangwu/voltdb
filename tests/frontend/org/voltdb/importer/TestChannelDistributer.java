@@ -116,9 +116,9 @@ public class TestChannelDistributer extends ZKTestBase {
                 .put(DUE,  getClient(2))
                 .build();
         distributers = ImmutableMap.<String, ChannelDistributer>builder()
-                .put(ZERO, new ChannelDistributer(zks.get(ZERO), ZERO))
-                .put(UNO,  new ChannelDistributer(zks.get(UNO), UNO))
-                .put(DUE,  new ChannelDistributer(zks.get(DUE), DUE))
+                .put(ZERO, new ChannelDistributerImpl(zks.get(ZERO), ZERO))
+                .put(UNO,  new ChannelDistributerImpl(zks.get(UNO), UNO))
+                .put(DUE,  new ChannelDistributerImpl(zks.get(DUE), DUE))
                 .build();
         for (ChannelDistributer cd: distributers.values()) {
             cd.registerCallback(YO, new Collector());
@@ -163,7 +163,7 @@ public class TestChannelDistributer extends ZKTestBase {
 
         int leaderCount = 0;
         for (ChannelDistributer distributer: distributers.values()) {
-            if (distributer.m_isLeader) {
+            if (((ChannelDistributerImpl)distributer).m_isLeader) {
                 ++leaderCount;
             }
         }
@@ -186,15 +186,15 @@ public class TestChannelDistributer extends ZKTestBase {
         while (!settled && --attempts >=0) {
             Thread.sleep(50);
             settled = true;
-            int stamp = distributers.get(ZERO).m_specs.getStamp();
+            int stamp = ((ChannelDistributerImpl) distributers.get(ZERO)).m_specs.getStamp();
             for (ChannelDistributer distributer: distributers.values()) {
-                settled = settled && stamp == distributer.m_specs.getStamp();
+                settled = settled && stamp == ((ChannelDistributerImpl) distributer).m_specs.getStamp();
             }
         }
         assertTrue(settled);
 
         Set<ChannelSpec> inZERO = Maps.filterValues(
-                distributers.get(DUE).m_specs.getReference(),
+                ((ChannelDistributerImpl) distributers.get(DUE)).m_specs.getReference(),
                 equalTo(ZERO))
                 .navigableKeySet();
         assertTrue(inZERO.size() > 0);

@@ -1898,10 +1898,10 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
             m_periodicWorks.remove(resMonitorWork);
             m_resourceUsageMonitor = null;
         }
-        ResourceUsageMonitor resMonitor  = new ResourceUsageMonitor(m_catalogContext.getDeployment().getSystemsettings(), getSnmpTrapSender(), m_channelDistributer, m_catalogContext.getDeployment().getDr() != null);
+        boolean isDREnabled = m_catalogContext.getDeployment().getDr() != null;
+        ResourceUsageMonitor resMonitor  = new ResourceUsageMonitor(m_catalogContext.getDeployment().getSystemsettings(), getSnmpTrapSender(), m_channelDistributer, isDREnabled);
         resMonitor.logResourceLimitConfigurationInfo();
-        // TODO: or if DR is enabled.
-        if (resMonitor.hasResourceLimitsConfigured()) {
+        if (resMonitor.hasResourceLimitsConfigured() || isDREnabled) {
             m_resourceUsageMonitor = resMonitor;
             resMonitor.registerForChannelCallbacks();
             resMonitorWork = scheduleWork(resMonitor, resMonitor.getResourceCheckInterval(), resMonitor.getResourceCheckInterval(), TimeUnit.SECONDS);

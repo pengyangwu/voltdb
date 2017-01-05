@@ -61,38 +61,16 @@ public class ResourceUsageMonitor implements Runnable, ChannelChangeCallback
     private String m_snmpRssLimitStr;
     private long m_snmpRssLimit;
     private ThresholdType m_snmpRssCriteria;
-    private final ChannelDistributer m_distributer;
-    private final boolean m_isDREnabled;
-    private final String m_distributerDesignation;
-    // TODO: does this need to be a member variable.
-    private final URI m_drRoleStatsURI;
-    private final Set<URI> m_channels;
-    private final AtomicBoolean m_isDRTrapSender = new AtomicBoolean(false);
+    private boolean m_isDREnabled;
+    private ChannelDistributer m_distributer;
+    private String m_clusterTag;
+    private String m_distributerDesignation;
+    private URI m_drRoleStatsURI;
+    private Set<URI> m_channels;
+    private AtomicBoolean m_isDRTrapSender = new AtomicBoolean(false);
 
-    // TODO: I don't need is DREnabled here.
     public ResourceUsageMonitor(SystemSettingsType systemSettings, SnmpTrapSender snmpTrapSender, ChannelDistributer distributer, boolean isDREnabled)
     {
-        if (distributer == null) {
-            System.err.println("XXX construct RUM with null");
-        } else {
-            System.err.println("XXX construct RUM with dist");
-        }
-        m_distributer = distributer;
-        m_isDREnabled = isDREnabled;
-        // TODO: add the cluster tag as in ImportLifeCycleManager ctor
-        m_distributerDesignation = "DRRoleStatsConsumer";
-        String clusterTag;
-        if (m_distributer != null) {
-            clusterTag = m_distributer.getClusterTag();
-        } else {
-            clusterTag = "CLUSTER_TAG";
-        }
-
-        m_drRoleStatsURI = URI.create(String.format("x-drrolestatsconsumer://" + clusterTag));
-        m_channels = ImmutableSet.of(m_drRoleStatsURI);
-
-        // TODO: worry about thread safety.
-
         if (systemSettings == null || systemSettings.getResourcemonitor() == null) {
             return;
         }
@@ -118,10 +96,19 @@ public class ResourceUsageMonitor implements Runnable, ChannelChangeCallback
             m_snmpRssLimit = Double.valueOf(dblLimit).longValue();
             m_snmpRssCriteria = m_snmpRssLimitStr.endsWith("%") ? ThresholdType.PERCENT : ThresholdType.LIMIT;
         }
+
+        m_isDREnabled = isDREnabled;
+        if (m_isDREnabled) {
+            m_distributer = distributer;
+            m_clusterTag = m_distributer.getClusterTag();
+            m_distributerDesignation = "DRRoleStatsConsumer";
+            m_drRoleStatsURI = URI.create(String.format("x-drrolestatsconsumer://" + m_distributer.getClusterTag()));
+            m_channels = ImmutableSet.of(m_drRoleStatsURI);
+        }
     }
 
     public void registerForChannelCallbacks() {
-        if (m_distributer != null) {
+        if (m_isDREnabled) {
             m_distributer.registerCallback(m_distributerDesignation, this);
             m_distributer.registerChannels(m_distributerDesignation, m_channels);
         }
@@ -172,7 +159,7 @@ public class ResourceUsageMonitor implements Runnable, ChannelChangeCallback
             return;
         }
 
-        if (isOverMemoryLimit() || m_diskLimitConfig.isOverLimitConfiguration()) {
+        if (hasResourceLimitsConfigured() && (isOverMemoryLimit() || m_diskLimitConfig.isOverLimitConfiguration())) {
             SyncCallback cb = new SyncCallback();
             if (getConnectionHandler().callProcedure(getInternalUser(), true, BatchTimeoutOverrideType.NO_TIMEOUT, cb, "@Pause")) {
                 try {
@@ -198,10 +185,13 @@ public class ResourceUsageMonitor implements Runnable, ChannelChangeCallback
                     ClientResponseImpl r = ClientResponseImpl.class.cast(cb.getResponse());
                     VoltTable stats = r.getResults()[0];
                     while (stats.advanceRow()) {
-                        // TODO: use was null.
-                        // TODO: only send if stopped
-                        m_snmpTrapSender.drRelationship(String.format("DR relationship failure, role %s is stopped.", stats.getString(DRRoleStats.CN_ROLE)));
-                        System.err.println("XXX stats: " + stats.getString(DRRoleStats.CN_ROLE) + " : " + stats.getString(DRRoleStats.CN_STATE) + " : " + stats.getLong(DRRoleStats.CN_REMOTE_CLUSTER_ID));
+                        String role = stats.getString(DRRoleStats.CN_ROLE);
+                        String state = stats.getString(DRRoleStats.CN_STATE);
+                        System.err.println("XXX stats: " + role + " : " + state + " : " + stats.getLong(DRRoleStats.CN_REMOTE_CLUSTER_ID));
+                        if (role == null || role.trim().isEmpty() || state == null || state.trim().isEmpty() || !state.equals("STOPPED")) {
+                            continue;
+                        }
+                        m_snmpTrapSender.drRelationship(String.format("DR relationship failure, role %s is stopped on cluster %s.", stats.getString(DRRoleStats.CN_ROLE), m_clusterTag));
                     }
 
                 } catch (InterruptedException e) {

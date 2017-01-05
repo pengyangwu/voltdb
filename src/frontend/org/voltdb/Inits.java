@@ -49,7 +49,7 @@ import org.voltdb.common.NodeState;
 import org.voltdb.compiler.deploymentfile.DeploymentType;
 import org.voltdb.compiler.deploymentfile.HttpsType;
 import org.voltdb.export.ExportManager;
-import org.voltdb.importer.ChannelDistributer;
+import org.voltdb.importer.ChannelDistributerImpl;
 import org.voltdb.importer.ImportManager;
 import org.voltdb.iv2.MpInitiator;
 import org.voltdb.iv2.TxnEgo;
@@ -721,7 +721,7 @@ public class Inits {
         @Override
         public void run() {
             try {
-                m_rvdb.m_channelDistributer = new ChannelDistributer(m_rvdb.m_messenger.getZK(), String.valueOf(m_rvdb.m_myHostId));
+                m_rvdb.m_channelDistributer = new ChannelDistributerImpl(m_rvdb.m_messenger.getZK(), String.valueOf(m_rvdb.m_myHostId));
             } catch (Throwable t) {
                 VoltDB.crashLocalVoltDB("Error setting up channel distributer", true, t);
             }
