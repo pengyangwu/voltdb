@@ -144,7 +144,7 @@ public class IndexScanPlanNode extends AbstractScanPlanNode {
 
     public void setSkipNullPredicate() {
         // prepare position of non null key
-        if (m_lookupType == IndexLookupType.EQ || isReverseScan()) {
+        if (m_lookupType == IndexLookupType.EQ || m_lookupType == IndexLookupType.NOT_DISTINCT || isReverseScan()) {
             m_skip_null_predicate = null;
             return;
         }
@@ -815,7 +815,7 @@ public class IndexScanPlanNode extends AbstractScanPlanNode {
             // Explain the search criteria that describe the start of the index scan, like
             // "(event_type = 1 AND event_start > x.start_time)"
             String start = explainSearchKeys(asIndexed, keySize);
-            if (m_lookupType == IndexLookupType.EQ) {
+            if (m_lookupType == IndexLookupType.EQ || m_lookupType == IndexLookupType.NOT_DISTINCT) {
                 // qualify whether the equality matching is for a unique value.
                 // " uniquely match (event_id = 1)" vs.
                 // " scan matches for (event_type = 1) AND (event_location = x.region)"
