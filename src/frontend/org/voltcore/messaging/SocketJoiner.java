@@ -201,7 +201,7 @@ public class SocketJoiner {
              */
             long retryInterval = RETRY_INTERVAL;
             final Random salt = new Random();
-            final long maxWait = 120;
+            final long maxWait = 300;
             while (true) {
                 try {
                     connectToPrimary(ip, ConnectStrategy.PROBE);
@@ -214,11 +214,12 @@ public class SocketJoiner {
                     } catch (InterruptedException ignoreIt) {
                     }
 
-                    //exponential back off with a salt to avoid collision. Max is 2 minutes.
-                    //For simultaneous multiple node rejoining, exponential back-off can be too much.
-                    //All later rejoining hosts may wait for (maxWait + salt) seconds without sending another request even through
-                    //previous node has finished rejoining.
+                    //exponential back off with a salt to avoid collision. Max is 5 minutes.
                     retryInterval = Math.min(retryInterval * 2, maxWait) + salt.nextInt(RETRY_INTERVAL_SALT);
+
+                    //Reset waiting time. The exponential back-off can be too much for simultaneous multiple node rejoining.
+                    //All later rejoining hosts may wait for (maxWait + salt) seconds without sending another rejoining request even through
+                    //no rejoining is in progress in the cluster.
                     if (retryInterval > maxWait) {
                         retryInterval = RETRY_INTERVAL;
                     }
