@@ -31,6 +31,7 @@ public interface SnmpTrapSender {
     //Update Snmp properties.
     public void notifyOfCatalogUpdate(SnmpType snmpType);
     public void crash(String msg);
+    public void drRelationship(String msg);
     public void hostDown(FaultLevel level, int hostId, String msg);
     public void hostUp(String msg);
     public void statistics(FaultFacility facility, String msg);

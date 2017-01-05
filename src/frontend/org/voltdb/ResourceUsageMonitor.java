@@ -17,6 +17,7 @@
 
 package org.voltdb;
 
+import com.google_voltpatches.common.collect.ImmutableSet;
 import org.voltcore.logging.VoltLogger;
 import org.voltcore.utils.CoreUtils;
 import org.voltdb.AuthSystem.AuthUser;
@@ -25,6 +26,10 @@ import org.voltdb.client.ClientResponse;
 import org.voltdb.client.SyncCallback;
 import org.voltdb.compiler.deploymentfile.ResourceMonitorType;
 import org.voltdb.compiler.deploymentfile.SystemSettingsType;
+import org.voltdb.importer.ChannelChangeCallback;
+import org.voltdb.importer.ChannelDistributer;
+import org.voltdb.importer.ImporterChannelAssignment;
+import org.voltdb.importer.VersionedOperationMode;
 import org.voltdb.snmp.FaultFacility;
 import org.voltdb.snmp.SnmpTrapSender;
 import org.voltdb.snmp.ThresholdType;
@@ -33,13 +38,19 @@ import org.voltdb.utils.PlatformProperties;
 import org.voltdb.utils.SystemStatsCollector;
 import org.voltdb.utils.SystemStatsCollector.Datum;
 
+import java.net.URI;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * Used to periodically check if the server's resource utilization is above the configured limits
  * and pause the server.
  */
-public class ResourceUsageMonitor implements Runnable
+public class ResourceUsageMonitor implements Runnable, ChannelChangeCallback
 {
     private static final VoltLogger m_logger = new VoltLogger("HOST");
+    private static final String DR_ROLE_STATS_CHANNEL = "drRoleStats";
+
 
     private String m_rssLimitStr;
     private long m_rssLimit;
@@ -50,9 +61,38 @@ public class ResourceUsageMonitor implements Runnable
     private String m_snmpRssLimitStr;
     private long m_snmpRssLimit;
     private ThresholdType m_snmpRssCriteria;
+    private final ChannelDistributer m_distributer;
+    private final boolean m_isDREnabled;
+    private final String m_distributerDesignation;
+    // TODO: does this need to be a member variable.
+    private final URI m_drRoleStatsURI;
+    private final Set<URI> m_channels;
+    private final AtomicBoolean m_isDRTrapSender = new AtomicBoolean(false);
 
-    public ResourceUsageMonitor(SystemSettingsType systemSettings, SnmpTrapSender snmpTrapSender)
+    // TODO: I don't need is DREnabled here.
+    public ResourceUsageMonitor(SystemSettingsType systemSettings, SnmpTrapSender snmpTrapSender, ChannelDistributer distributer, boolean isDREnabled)
     {
+        if (distributer == null) {
+            System.err.println("XXX construct RUM with null");
+        } else {
+            System.err.println("XXX construct RUM with dist");
+        }
+        m_distributer = distributer;
+        m_isDREnabled = isDREnabled;
+        // TODO: add the cluster tag as in ImportLifeCycleManager ctor
+        m_distributerDesignation = "DRRoleStatsConsumer";
+        String clusterTag;
+        if (m_distributer != null) {
+            clusterTag = m_distributer.getClusterTag();
+        } else {
+            clusterTag = "CLUSTER_TAG";
+        }
+
+        m_drRoleStatsURI = URI.create(String.format("x-drrolestatsconsumer://" + clusterTag));
+        m_channels = ImmutableSet.of(m_drRoleStatsURI);
+
+        // TODO: worry about thread safety.
+
         if (systemSettings == null || systemSettings.getResourcemonitor() == null) {
             return;
         }
@@ -77,6 +117,13 @@ public class ResourceUsageMonitor implements Runnable
             double dblLimit = getMemoryLimitSize(m_snmpRssLimitStr);
             m_snmpRssLimit = Double.valueOf(dblLimit).longValue();
             m_snmpRssCriteria = m_snmpRssLimitStr.endsWith("%") ? ThresholdType.PERCENT : ThresholdType.LIMIT;
+        }
+    }
+
+    public void registerForChannelCallbacks() {
+        if (m_distributer != null) {
+            m_distributer.registerCallback(m_distributerDesignation, this);
+            m_distributer.registerChannels(m_distributerDesignation, m_channels);
         }
     }
 
@@ -119,13 +166,15 @@ public class ResourceUsageMonitor implements Runnable
     @Override
     public void run()
     {
+        System.err.println("XXX Res runs " + System.currentTimeMillis());
+
         if (getClusterOperationMode() != OperationMode.RUNNING) {
             return;
         }
 
         if (isOverMemoryLimit() || m_diskLimitConfig.isOverLimitConfiguration()) {
             SyncCallback cb = new SyncCallback();
-            if (getConnectionHadler().callProcedure(getInternalUser(), true, BatchTimeoutOverrideType.NO_TIMEOUT, cb, "@Pause")) {
+            if (getConnectionHandler().callProcedure(getInternalUser(), true, BatchTimeoutOverrideType.NO_TIMEOUT, cb, "@Pause")) {
                 try {
                     cb.waitForResponse();
                 } catch (InterruptedException e) {
@@ -139,14 +188,71 @@ public class ResourceUsageMonitor implements Runnable
                 m_logger.error("Unable to pause cluster for resource overusage: failed to invoke @Pause");
             }
         }
+
+        if (m_isDREnabled && m_isDRTrapSender.get()) {
+            System.err.println("XXX in run, I'm the trap sender.");
+            SyncCallback cb = new SyncCallback();
+            if (getConnectionHandler().callProcedure(getInternalUser(), true, BatchTimeoutOverrideType.NO_TIMEOUT, cb, "@Statistics", "DRROLE", 0)) {
+                try {
+                    cb.waitForResponse();
+                    ClientResponseImpl r = ClientResponseImpl.class.cast(cb.getResponse());
+                    VoltTable stats = r.getResults()[0];
+                    while (stats.advanceRow()) {
+                        // TODO: use was null.
+                        // TODO: only send if stopped
+                        m_snmpTrapSender.drRelationship(String.format("DR relationship failure, role %s is stopped.", stats.getString(DRRoleStats.CN_ROLE)));
+                        System.err.println("XXX stats: " + stats.getString(DRRoleStats.CN_ROLE) + " : " + stats.getString(DRRoleStats.CN_STATE) + " : " + stats.getLong(DRRoleStats.CN_REMOTE_CLUSTER_ID));
+                    }
+
+                } catch (InterruptedException e) {
+                    m_logger.error("Interrupted while pausing cluster for resource overusage", e);
+                }
+            } else {
+                m_logger.error("Unable to query for DRROLE statistics");
+            }
+        } else {
+            System.err.println("XXX Ah, in run, not the trap sender.");
+        }
+
     }
+
+    @Override
+    public void onChange(ImporterChannelAssignment assignment) {
+        if (assignment.getAssigned().contains(m_drRoleStatsURI)) {
+            m_isDRTrapSender.set(true);
+            System.err.println("XXX on change, I'm the trap sender.");
+        } else {
+            m_isDRTrapSender.set(false);
+            System.err.println("XXX on change, not the trap sender");
+        }
+
+
+        // TODO: need to think about version?
+
+        System.err.println("XXX on change");
+
+        for (URI removed: assignment.getRemoved()) {
+            System.err.println("XXX removed " + removed);
+        }
+
+        for (URI added: assignment.getAdded()) {
+            System.err.println("XXX added " + added);
+        }
+
+        for (URI assigned: assignment.getAssigned()) {
+            System.err.println("XXX assigned " + assigned);
+        }
+    }
+
+    @Override
+    public void onClusterStateChange(VersionedOperationMode mode) {}
 
     private OperationMode getClusterOperationMode()
     {
         return VoltDB.instance().getMode();
     }
 
-    private InternalConnectionHandler getConnectionHadler()
+    private InternalConnectionHandler getConnectionHandler()
     {
         return VoltDB.instance().getClientInterface().getInternalConnectionHandler();
     }

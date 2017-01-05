@@ -119,6 +119,7 @@ import org.voltdb.dtxn.LatencyHistogramStats;
 import org.voltdb.dtxn.LatencyStats;
 import org.voltdb.dtxn.SiteTracker;
 import org.voltdb.export.ExportManager;
+import org.voltdb.importer.ChannelDistributer;
 import org.voltdb.importer.ImportManager;
 import org.voltdb.iv2.BaseInitiator;
 import org.voltdb.iv2.Cartographer;
@@ -255,6 +256,7 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
     MpInitiator m_MPI = null;
     Map<Integer, Long> m_iv2InitiatorStartingTxnIds = new HashMap<>();
     private ScheduledFuture<?> resMonitorWork;
+    private ResourceUsageMonitor m_resourceUsageMonitor;
 
 
     private NodeStateTracker m_statusTracker;
@@ -322,6 +324,8 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
     List<Integer> m_partitionsToSitesAtStartupForExportInit;
 
     RestoreAgent m_restoreAgent = null;
+
+    ChannelDistributer m_channelDistributer = null;
 
     private final ListeningExecutorService m_es = CoreUtils.getCachedSingleThreadExecutor("StartAction ZK Watcher", 15000);
 
@@ -1879,17 +1883,24 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
     }
 
     private void startResourceUsageMonitor() {
+        System.err.println("XXX RealVoltDB starts RUM");
         if (resMonitorWork != null) {
+
             resMonitorWork.cancel(false);
             try {
                 resMonitorWork.get();
             } catch(Exception e) { } // Ignore exceptions because we don't really care about the result here.
             m_periodicWorks.remove(resMonitorWork);
+            m_resourceUsageMonitor = null;
         }
-        ResourceUsageMonitor resMonitor  = new ResourceUsageMonitor(m_catalogContext.getDeployment().getSystemsettings(), getSnmpTrapSender());
+        ResourceUsageMonitor resMonitor  = new ResourceUsageMonitor(m_catalogContext.getDeployment().getSystemsettings(), getSnmpTrapSender(), m_channelDistributer, m_catalogContext.getDeployment().getDr() != null);
         resMonitor.logResourceLimitConfigurationInfo();
+        // TODO: or if DR is enabled.
         if (resMonitor.hasResourceLimitsConfigured()) {
+            m_resourceUsageMonitor = resMonitor;
+            resMonitor.registerForChannelCallbacks();
             resMonitorWork = scheduleWork(resMonitor, resMonitor.getResourceCheckInterval(), resMonitor.getResourceCheckInterval(), TimeUnit.SECONDS);
+            System.err.println("XXX RVDB adds RUM as periodic work");
             m_periodicWorks.add(resMonitorWork);
         }
     }
