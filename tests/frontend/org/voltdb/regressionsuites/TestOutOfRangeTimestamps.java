@@ -44,6 +44,22 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
             "10123-04-21 21:09:34.123059"  // too late
     };
 
+    private boolean hasFiveDigitYear(String dateStr) {
+    	int numDigits = 0;
+    	for (int i = 0; i < dateStr.length(); ++i) {
+    		if (Character.isDigit(dateStr.charAt(i))) {
+    			++numDigits;
+    		}
+    		else {
+    			break;
+    		}
+    	}
+    	
+    	assertTrue(numDigits == 5 || numDigits == 4);
+    	
+    	return numDigits == 5;
+    }
+    
     public void testIt() throws Exception {
         Client client = getClient();
 
@@ -57,7 +73,9 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
 
         for (String ts : INVALID_TIMESTAMPS) {
             String createProcStmt = "create procedure myproc_" + i + " as insert into t values(" + i + ", '" + ts + "');";
-            verifyStmtFails(client, createProcStmt, "timestamp value is outside of the supported range");
+            String expectedError = hasFiveDigitYear(ts) ? 
+            		"Timestamp format must be yyyy-mm-dd" : "timestamp value is outside of the supported range"; 
+            verifyStmtFails(client, createProcStmt, expectedError);
             ++i;
         }
 
