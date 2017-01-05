@@ -828,6 +828,8 @@ string indexLookupToString(IndexLookupType type)
         return "LTE";
     case INDEX_LOOKUP_TYPE_GEO_CONTAINS:
         return "GEO_CONTAINS";
+    case INDEX_LOOKUP_TYPE_NOT_DISTINCT:
+        return "NOT_DISTINCT";
     }
     return "INVALID";
 }
@@ -854,6 +856,9 @@ IndexLookupType stringToIndexLookup(string str)
     }
     if (str == "GEO_CONTAINS") {
         return INDEX_LOOKUP_TYPE_GEO_CONTAINS;
+    }
+    if (str == "NOT_DISTINCT") {
+        return INDEX_LOOKUP_TYPE_NOT_DISTINCT;
     }
     return INDEX_LOOKUP_TYPE_INVALID;
 }

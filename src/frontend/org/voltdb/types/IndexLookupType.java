@@ -25,13 +25,14 @@ import java.util.Map;
  * Specifies how to lookup on Table Index.
  */
 public enum IndexLookupType {
-    INVALID (0, "?"),
-    EQ      (1, "="),
-    GT      (2, ">"),
-    GTE     (3, ">="),
-    LT      (4, "<"),
-    LTE     (5, "<="),
-    GEO_CONTAINS (6, "contains");
+    INVALID       (0, "?"),
+    EQ            (1, "="),
+    GT            (2, ">"),
+    GTE           (3, ">="),
+    LT            (4, "<"),
+    LTE           (5, "<="),
+    GEO_CONTAINS  (6, "contains"),
+    NOT_DISTINCT  (7, "is not distinct from");
 
     private final String m_symbol;
 
