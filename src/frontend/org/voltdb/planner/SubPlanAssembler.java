@@ -464,7 +464,7 @@ public abstract class SubPlanAssembler {
             // Equality filters get first priority.
             boolean allowIndexedJoinFilters = (inListExpr == null);
             IndexableExpression eqExpr = getIndexableExpressionFromFilters(
-                ExpressionType.COMPARE_EQUAL, ExpressionType.COMPARE_EQUAL,
+                ExpressionType.COMPARE_EQUAL, ExpressionType.COMPARE_NOTDISTINCT,
                 coveringExpr, coveringColId, tableScan, filtersToCover,
                 allowIndexedJoinFilters, EXCLUDE_FROM_POST_FILTERS);
 
@@ -504,6 +504,9 @@ public abstract class SubPlanAssembler {
                 if (eqExpr == null) {
                     break;
                 }
+            }
+            if (eqExpr.m_filter.getExpressionType() == ExpressionType.COMPARE_NOTDISTINCT) {
+                retval.lookupType = IndexLookupType.NOT_DISTINCT;
             }
             AbstractExpression comparator = eqExpr.getFilter();
             retval.indexExprs.add(comparator);
