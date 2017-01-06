@@ -48,12 +48,7 @@ static const int64_t PTIME_MIN_MILLISECOND_INTERVAL = -PTIME_MAX_MILLISECOND_INT
 static const int64_t PTIME_MAX_MICROSECOND_INTERVAL = PTIME_MAX_MILLISECOND_INTERVAL * 1000;
 static const int64_t PTIME_MIN_MICROSECOND_INTERVAL = -PTIME_MAX_MICROSECOND_INTERVAL;
 
-static inline void checkRangeOfEpochMicros(int64_t epochMicros) {
-    if (epochMicros < GREGORIAN_EPOCH || epochMicros > NYE9999) {
-        throw voltdb::SQLException(voltdb::SQLException::data_exception_numeric_value_out_of_range,
-                                   "Value out of range. Cannot convert dates prior to the year 1583 or after the year 9999");
-    }
-}
+namespace voltdb {
 
 /** Convert from epoch_micros to date **/
 static inline void micros_to_date(int64_t epoch_micros_in, boost::gregorian::date& date_out) {
@@ -108,8 +103,6 @@ static inline int64_t addMonths(int64_t epoch_micros, int64_t months) {
     boost::posix_time::time_duration td = ts - EPOCH;
     return td.total_microseconds();
 }
-
-namespace voltdb {
 
 // REFER JAVA class: UniqueIdGenerator.
 // 23 bits are used for COUNTER_BITS and PARTITIONID_BITS.

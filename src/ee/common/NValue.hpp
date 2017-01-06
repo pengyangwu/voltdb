@@ -45,6 +45,7 @@
 #include "common/serializeio.h"
 #include "common/types.h"
 #include "common/value_defs.h"
+#include "expressions/dateconstants.h"
 #include "GeographyPointValue.hpp"
 #include "GeographyValue.hpp"
 #include "utf8.h"
@@ -136,6 +137,13 @@ inline void throwCastSQLValueOutOfRangeException<TTInt>(
 
     throw SQLException(SQLException::data_exception_numeric_value_out_of_range,
                        msg, internalFlags);
+}
+
+inline void checkRangeOfEpochMicros(int64_t epochMicros) {
+    if (epochMicros < GREGORIAN_EPOCH || epochMicros > NYE9999) {
+        throw voltdb::SQLException(voltdb::SQLException::data_exception_numeric_value_out_of_range,
+                                   "Value out of range. Cannot convert dates prior to the year 1583 or after the year 9999");
+    }
 }
 
 int warn_if(int condition, const char* message);
@@ -910,14 +918,17 @@ private:
         return *reinterpret_cast<int64_t*>(m_data);
     }
 
-    const int64_t& getTimestamp() const {
+    int64_t getTimestamp() const {
         assert(getValueType() == VALUE_TYPE_TIMESTAMP);
         return *reinterpret_cast<const int64_t*>(m_data);
     }
 
-    int64_t& getTimestamp() {
+    void setTimestampFromInt64(int64_t value) {
         assert(getValueType() == VALUE_TYPE_TIMESTAMP);
-        return *reinterpret_cast<int64_t*>(m_data);
+        if (value != INT64_NULL) {
+            checkRangeOfEpochMicros(value);
+        }
+        *reinterpret_cast<int64_t*>(m_data) = value;
     }
 
     const double& getDouble() const {
@@ -1222,19 +1233,19 @@ private:
         const ValueType type = getValueType();
         switch (type) {
         case VALUE_TYPE_TINYINT:
-            retval.getTimestamp() = static_cast<int64_t>(getTinyInt());
+            retval.setTimestampFromInt64(static_cast<int64_t>(getTinyInt()));
             break;
         case VALUE_TYPE_SMALLINT:
-            retval.getTimestamp() = static_cast<int64_t>(getSmallInt());
+            retval.setTimestampFromInt64(static_cast<int64_t>(getSmallInt()));
             break;
         case VALUE_TYPE_INTEGER:
-            retval.getTimestamp() = static_cast<int64_t>(getInteger());
+            retval.setTimestampFromInt64(static_cast<int64_t>(getInteger()));
             break;
         case VALUE_TYPE_BIGINT:
-            retval.getTimestamp() = getBigInt();
+            retval.setTimestampFromInt64(getBigInt());
             break;
         case VALUE_TYPE_TIMESTAMP:
-            retval.getTimestamp() = getTimestamp();
+            retval.setTimestampFromInt64(getTimestamp());
             break;
         case VALUE_TYPE_DOUBLE:
             // TODO: Consider just eliminating this switch case to throw a cast exception,
@@ -1247,7 +1258,7 @@ private:
             if (getDouble() > (double)INT64_MAX || getDouble() < (double)VOLT_INT64_MIN) {
                 throwCastSQLValueOutOfRangeException<double>(getDouble(), VALUE_TYPE_DOUBLE, VALUE_TYPE_BIGINT);
             }
-            retval.getTimestamp() = static_cast<int64_t>(getDouble());
+            retval.setTimestampFromInt64(static_cast<int64_t>(getDouble()));
             break;
         case VALUE_TYPE_DECIMAL: {
             // TODO: Consider just eliminating this switch case to throw a cast exception,
@@ -1258,14 +1269,14 @@ private:
             // OR it might be a convenience for some obscure system-generated edge case?
 
             TTInt scaledValue = getDecimal();
-            retval.getTimestamp() = narrowDecimalToBigInt(scaledValue);
+            retval.setTimestampFromInt64(narrowDecimalToBigInt(scaledValue));
             break;
         }
         case VALUE_TYPE_VARCHAR: {
             int32_t length;
             const char* buf = getObject_withoutNull(&length);
             const std::string value(buf, length);
-            retval.getTimestamp() = parseTimestampString(value);
+            retval.setTimestampFromInt64(parseTimestampString(value));
             break;
         }
         case VALUE_TYPE_VARBINARY:
@@ -2365,7 +2376,7 @@ private:
 
     static NValue getTimestampValue(int64_t value) {
         NValue retval(VALUE_TYPE_TIMESTAMP);
-        retval.getTimestamp() = value;
+        retval.setTimestampFromInt64(value);
         if (value == INT64_NULL) {
             retval.tagAsNull();
         }
@@ -2691,7 +2702,7 @@ inline void NValue::setNull() {
         getInteger() = INT32_NULL;
         break;
     case VALUE_TYPE_TIMESTAMP:
-        getTimestamp() = INT64_NULL;
+        setTimestampFromInt64(INT64_NULL);
         break;
     case VALUE_TYPE_BIGINT:
         getBigInt() = INT64_NULL;
@@ -2773,7 +2784,8 @@ inline NValue NValue::initFromTupleStorage(const void *storage, ValueType type, 
         break;
     }
     case VALUE_TYPE_TIMESTAMP:
-        if ((retval.getTimestamp() = *reinterpret_cast<const int64_t*>(storage)) == INT64_NULL) {
+        retval.setTimestampFromInt64(*reinterpret_cast<const int64_t*>(storage));
+        if (retval.getTimestamp() == INT64_NULL) {
             retval.tagAsNull();
         }
         break;
@@ -3017,7 +3029,7 @@ inline void NValue::deserializeFromAllocateForStorage(ValueType type, SerializeI
         }
         return;
     case VALUE_TYPE_TIMESTAMP:
-        getTimestamp() = input.readLong();
+        setTimestampFromInt64(input.readLong());
         if (getTimestamp() == INT64_NULL) {
             tagAsNull();
         }

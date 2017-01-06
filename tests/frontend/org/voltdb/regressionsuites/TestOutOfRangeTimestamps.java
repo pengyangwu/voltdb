@@ -45,21 +45,21 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
     };
 
     private boolean hasFiveDigitYear(String dateStr) {
-    	int numDigits = 0;
-    	for (int i = 0; i < dateStr.length(); ++i) {
-    		if (Character.isDigit(dateStr.charAt(i))) {
-    			++numDigits;
-    		}
-    		else {
-    			break;
-    		}
-    	}
-    	
-    	assertTrue(numDigits == 5 || numDigits == 4);
-    	
-    	return numDigits == 5;
+        int numDigits = 0;
+        for (int i = 0; i < dateStr.length(); ++i) {
+            if (Character.isDigit(dateStr.charAt(i))) {
+                ++numDigits;
+            }
+            else {
+                break;
+            }
+        }
+
+        assertTrue(numDigits == 5 || numDigits == 4);
+
+        return numDigits == 5;
     }
-    
+
     public void testIt() throws Exception {
         Client client = getClient();
 
@@ -73,17 +73,46 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
 
         for (String ts : INVALID_TIMESTAMPS) {
             String createProcStmt = "create procedure myproc_" + i + " as insert into t values(" + i + ", '" + ts + "');";
-            String expectedError = hasFiveDigitYear(ts) ? 
-            		"Timestamp format must be yyyy-mm-dd" : "timestamp value is outside of the supported range"; 
+            String expectedError = hasFiveDigitYear(ts) ?
+                        "Timestamp format must be yyyy-mm-dd" : "timestamp value is outside of the supported range";
             verifyStmtFails(client, createProcStmt, expectedError);
             ++i;
         }
 
+        client.callProcedure("@AdHoc", "create procedure insWithParam as insert into t values(?, ?)");
+
+        // Pass a string value to a TS parameter
+        for (String ts : VALID_TIMESTAMPS) {
+            client.callProcedure("insWithParam", i, ts);
+            ++i;
+        }
+
+        for (String ts : INVALID_TIMESTAMPS) {
+            verifyProcFails(client, "out of range for the target parameter type", "insWithParam", i, ts);
+            ++i;
+        }
+
+        // Inner cast declares the type of the parameter, the outer
+        // cast is meant to force conversion in EE
+        client.callProcedure("@AdHoc", "create procedure insWithCast as "
+                        + "insert into t values(?, cast(cast(? as varchar) as timestamp))");
+
+        // Cast a string to a TS in the EE
+        for (String ts : VALID_TIMESTAMPS) {
+            client.callProcedure("insWithCast", i, ts);
+            ++i;
+        }
+
+        for (String ts : INVALID_TIMESTAMPS) {
+
+            String expectedMsg = hasFiveDigitYear(ts) ? "YYYY-MM" : "Cannot convert dates prior to the year 1583 or after the year 9999";
+            verifyProcFails(client, expectedMsg, "insWithCast", i, ts);
+            ++i;
+        }
     }
 
     public TestOutOfRangeTimestamps(String name) {
         super(name);
-
     }
 
     static public Test suite() throws Exception {
