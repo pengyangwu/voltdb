@@ -23,8 +23,6 @@
 
 package org.voltdb.regressionsuites;
 
-import java.util.Formatter;
-
 import org.voltdb.BackendTarget;
 import org.voltdb.client.Client;
 import org.voltdb.compiler.VoltProjectBuilder;
@@ -36,7 +34,7 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
     public static final String[] VALID_TIMESTAMPS = {
             "1983-10-31 17:21:21.456987", // just some timestamp
             "1583-01-01 00:00:00.000000", // min valid
-            "9999-12-31 23:23:59.999999"  // max valid
+            "9999-12-31 23:59:59.999999"  // max valid
     };
 
     public static final String[] INVALID_TIMESTAMPS = {
@@ -115,30 +113,37 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
         // CREATE TABLE with DEFAULT clause
         String createTblTemplate = "create table t%d (i integer, ts timestamp default '%s');";
         for (String ts : VALID_TIMESTAMPS) {
-            Formatter formatter = new Formatter();
-            try {
-                String createTblStmt = formatter.format(createTblTemplate, i, ts).toString();
-                client.callProcedure("@AdHoc", createTblStmt);
-                ++i;
-            }
-            finally {
-                formatter.close();
-            }
+            String createTblStmt = String.format(createTblTemplate, i, ts);
+            client.callProcedure("@AdHoc", createTblStmt);
+            ++i;
         }
 
         for (String ts : INVALID_TIMESTAMPS) {
-            Formatter formatter = new Formatter();
-            try {
-                String createTblStmt = formatter.format(createTblTemplate, i, ts).toString();
-                String expectedMsg = hasFiveDigitYear(ts) ?
-                        "invalid datetime format" : "Requested timestamp value is outside of the supported range";
-                verifyStmtFails(client, createTblStmt, expectedMsg);
-                ++i;
-            }
-            finally {
-                formatter.close();
-            }
+            String createTblStmt = String.format(createTblTemplate, i, ts);
+            String expectedMsg = hasFiveDigitYear(ts) ?
+                    "invalid datetime format" : "Requested timestamp value is outside of the supported range";
+            verifyStmtFails(client, createTblStmt, expectedMsg);
+            ++i;
         }
+
+        String stmtTemplate =
+                "select "
+                + "case when year(cast('%s' as timestamp)) < 9999 "
+                + "then dateadd(microsecond, 1, '%s') else now() end "
+                + "from t";
+        for (String ts : VALID_TIMESTAMPS) {
+            String stmt = String.format(stmtTemplate, ts, ts);
+            client.callProcedure("@AdHoc", stmt);
+        }
+
+        for (String ts : INVALID_TIMESTAMPS) {
+            String stmt = String.format(stmtTemplate, ts, ts);
+            String expectedMsg = hasFiveDigitYear(ts) ? "invalid datetime format" : "Requested timestamp value is outside of the supported range";
+            verifyStmtFails(client, stmt, expectedMsg);
+        }
+
+        // Test adding to timestamps to produce out-of-range values.
+        verifyStmtFails(client, "select dateadd(microsecond, 1, ts) from t;", "Value out of range");
     }
 
     public TestOutOfRangeTimestamps(String name) {
