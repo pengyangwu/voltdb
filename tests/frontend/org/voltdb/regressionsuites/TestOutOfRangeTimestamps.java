@@ -23,6 +23,8 @@
 
 package org.voltdb.regressionsuites;
 
+import java.util.Formatter;
+
 import org.voltdb.BackendTarget;
 import org.voltdb.client.Client;
 import org.voltdb.compiler.VoltProjectBuilder;
@@ -108,6 +110,34 @@ public class TestOutOfRangeTimestamps extends RegressionSuite {
             String expectedMsg = hasFiveDigitYear(ts) ? "YYYY-MM" : "Cannot convert dates prior to the year 1583 or after the year 9999";
             verifyProcFails(client, expectedMsg, "insWithCast", i, ts);
             ++i;
+        }
+
+        // CREATE TABLE with DEFAULT clause
+        String createTblTemplate = "create table t%d (i integer, ts timestamp default '%s');";
+        for (String ts : VALID_TIMESTAMPS) {
+            Formatter formatter = new Formatter();
+            try {
+                String createTblStmt = formatter.format(createTblTemplate, i, ts).toString();
+                client.callProcedure("@AdHoc", createTblStmt);
+                ++i;
+            }
+            finally {
+                formatter.close();
+            }
+        }
+
+        for (String ts : INVALID_TIMESTAMPS) {
+            Formatter formatter = new Formatter();
+            try {
+                String createTblStmt = formatter.format(createTblTemplate, i, ts).toString();
+                String expectedMsg = hasFiveDigitYear(ts) ?
+                        "invalid datetime format" : "Requested timestamp value is outside of the supported range";
+                verifyStmtFails(client, createTblStmt, expectedMsg);
+                ++i;
+            }
+            finally {
+                formatter.close();
+            }
         }
     }
 

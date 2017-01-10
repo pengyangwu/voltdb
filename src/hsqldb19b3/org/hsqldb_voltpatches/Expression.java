@@ -92,6 +92,7 @@ import org.hsqldb_voltpatches.types.NullType;
 import org.hsqldb_voltpatches.types.NumberType;
 import org.hsqldb_voltpatches.types.TimestampData;
 import org.hsqldb_voltpatches.types.Type;
+import org.voltdb.types.TimestampType;
 
 /**
  * Expression class.
@@ -1726,9 +1727,17 @@ public class Expression {
                 // EL HACKO: I'm just adding in the timezone seconds
                 // at the moment, hope this is right --izzy
                 TimestampData time = (TimestampData) valueData;
-                exp.attributes.put("value", Long.toString(Math.round((time.getSeconds() +
-                                                                      time.getZone()) * 1e6) +
-                                                          time.getNanos() / 1000));
+                long microsSinceEpoch = Math.round((time.getSeconds() + time.getZone()) * 1e6) + time.getNanos() / 1000;
+
+                try {
+                    // Make sure that the timestamp is within the range that VoltDB supports.
+                    new TimestampType(microsSinceEpoch);
+                }
+                catch (IllegalArgumentException iac) {
+                    throw new HSQLParseException(iac.getMessage());
+                }
+
+                exp.attributes.put("value", Long.toString(microsSinceEpoch));
                 return exp;
             }
 

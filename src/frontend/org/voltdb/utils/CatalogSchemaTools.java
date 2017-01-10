@@ -156,7 +156,7 @@ public abstract class CatalogSchemaTools {
                         defaultvalue = "CURRENT_TIMESTAMP";
                     }
                     else {
-                        assert(defaultvalue.matches("[0-9]+"));
+                        assert(defaultvalue.matches("-?[0-9]+"));
                         long epoch = Long.parseLong(defaultvalue);
                         Date d = new Date(epoch / 1000);
                         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
