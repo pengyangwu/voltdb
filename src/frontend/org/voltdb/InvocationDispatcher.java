@@ -527,9 +527,9 @@ public final class InvocationDispatcher {
                 // is single or multi partition and read-only or read-write.
                 proc = "@AdHoc_RW_MP";
             }
-            else if ("@UpdateClasses".equals(procName)) {
-                // Icky.  Map @UpdateClasses to @UpdateApplicationCatalog.  We want the
-                // permissions and replication policy for @UAC, and we'll deal with the
+            else if ("@UpdateClasses".equals(procName) || "@UpdateApplication".equals(procName)) {
+                // Icky.  Map @UpdateClasses or UpdateApplication to @UpdateApplicationCatalog.
+                // We want the permissions and replication policy for @UAC, and we'll deal with the
                 // parameter validation stuff separately (the different name will
                 // skip the @UAC-specific policy)
                 proc = "@UpdateApplicationCatalog";
@@ -1014,8 +1014,8 @@ public final class InvocationDispatcher {
     }
 
     private static String checkParametersForUpdateApplication(final Object[] paramArray) {
-        if (paramArray.length != 3) {
-            return "Expect 3 parameters, but received " + paramArray.length;
+        if (paramArray.length != 4) {
+            return "Expect 4 parameters, but received " + paramArray.length;
         }
 
         // TODO(xin): check parameters

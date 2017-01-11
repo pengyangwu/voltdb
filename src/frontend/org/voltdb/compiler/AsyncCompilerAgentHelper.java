@@ -98,8 +98,25 @@ public class AsyncCompilerAgentHelper
                 deploymentString = null;
             }
             else if ("@UpdateApplication".equals(work.invocationName)) {
+            	// TODO (xin): "load classes xxx.jar" is the first stmt
 
-
+                // provided operationString is really a String with class patterns to delete,
+                // provided newCatalogJar is the jarfile with the new classes
+                if (ccParam.operationBytes != null) {
+                    newCatalogJar = new InMemoryJarfile(ccParam.operationBytes);
+                }
+                try {
+                    newCatalogJar = handleUpdateClasses(context.catalog, oldJar,
+                            ccParam.ddlStmts, newCatalogJar, ccParam.operationString);
+                }
+                catch (IOException e) {
+                    retval.errorMsg = "Unexpected IO exception @UpdateClasses modifying classes " +
+                        "from catalog: " + e.getMessage();
+                    return retval;
+                }
+                // Real deploymentString should be the current deployment, just set it to null
+                // here and let it get filled in correctly later.
+                deploymentString = null;
             }
             else if ("@AdHoc".equals(work.invocationName)) {
                 // work.adhocDDLStmts should be applied to the current catalog
@@ -338,7 +355,6 @@ public class AsyncCompilerAgentHelper
             String newDDL = combineStmts(stmts, false);
             compiler.compileInMemoryJarfileWithNewDDL(jarfile, newDDL, oldCatalog);
         }
-
 
         return jarfile;
     }

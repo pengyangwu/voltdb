@@ -19,7 +19,6 @@ package org.voltdb.compiler;
 
 import java.util.List;
 
-import org.voltcore.utils.Pair;
 import org.voltdb.AuthSystem;
 import org.voltdb.utils.Encoder;
 
@@ -144,11 +143,11 @@ public class CatalogChangeWork extends AsyncCompilerWork {
             ddlStmts = new String[]{sql};
 
             if (paramArray[1] != null) {
-                @SuppressWarnings("unchecked")
-                List<Pair<String, byte[]>> jarInfoList = (List<Pair<String, byte[]>>) paramArray[1];
-                Pair<String, byte[]> jarInfo = jarInfoList.iterator().next();
-                jarIdentifier = jarInfo.getFirst();
-                catalogBytes = jarInfo.getSecond();
+                List<java.util.Map.Entry<String, byte[]>> jarInfoList = (List<java.util.Map.Entry<String, byte[]>>) paramArray[1];
+                java.util.Map.Entry<String, byte[]> jarInfo = jarInfoList.iterator().next();
+
+                jarIdentifier = jarInfo.getKey();
+                catalogBytes = jarInfo.getValue();
             }
             if (paramArray[2] != null) {
                 // classes delete pattern strings
