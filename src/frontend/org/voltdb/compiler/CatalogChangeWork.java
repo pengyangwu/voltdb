@@ -17,30 +17,46 @@
 
 package org.voltdb.compiler;
 
+import java.util.List;
+
+import org.voltcore.utils.Pair;
 import org.voltdb.AuthSystem;
+import org.voltdb.utils.Encoder;
 
 public class CatalogChangeWork extends AsyncCompilerWork {
     private static final long serialVersionUID = -5257248292283453286L;
 
-    // The bytes for the catalog operation, if any.  May be null in all cases
-    // For @UpdateApplicationCatalog, this will contain the compiled catalog jarfile bytes
-    // For @UpdateClasses, this will contain the class jarfile bytes
-    // For @AdHoc DDL work, this will be null
-    final byte[] operationBytes;
-    // The string for the catalog operation, if any.  May be null in all cases
-    // For @UpdateApplicationCatalog, this will contain the deployment string to apply
-    // For @UpdateClasses, this will contain the class deletion patterns
-    // For @AdHoc DDL work, this will be null
-    final String operationString;
-    final String[] adhocDDLStmts;
+    public static class CatalogChangeParameters {
+        public final String[] ddlStmts;
+        public final String jarIdentifier;
+        // The bytes for the catalog operation, if any.  May be null in all cases
+        // For @UpdateApplicationCatalog, this will contain the compiled catalog jarfile bytes
+        // For @UpdateClasses, this will contain the class jarfile bytes
+        // For @AdHoc DDL work, this will be null
+        public final byte[] operationBytes;
+        // The string for the catalog operation, if any.  May be null in all cases
+        // For @UpdateApplicationCatalog, this will contain the deployment string to apply
+        // For @UpdateClasses, this will contain the class deletion patterns
+        // For @AdHoc DDL work, this will be null
+        public final String operationString;
+
+        public CatalogChangeParameters (String[] stmts, String identifier, byte[] operationBytes, String operationString) {
+            this.ddlStmts = stmts;
+            this.jarIdentifier = identifier;
+            this.operationBytes = operationBytes;
+            this.operationString = operationString;
+        }
+    }
+
+    public CatalogChangeParameters ccParams;
     final byte[] replayHashOverride;
     public final long replayTxnId;
     public final long replayUniqueId;
 
     public CatalogChangeWork(
             long replySiteId,
-            long clientHandle, long connectionId, String hostname, boolean adminConnection,
-            Object clientData, byte[] operationBytes, String operationString,
+            long clientHandle, long connectionId, String hostname, boolean adminConnection, Object clientData,
+            CatalogChangeParameters ccParams,
             String invocationName, boolean onReplica, boolean useAdhocDDL,
             AsyncCompilerWorkCompletionHandler completionHandler,
             AuthSystem.AuthUser user, byte[] replayHashOverride,
@@ -50,14 +66,7 @@ public class CatalogChangeWork extends AsyncCompilerWork {
               adminConnection, clientData, invocationName,
               onReplica, useAdhocDDL,
               completionHandler, user);
-        if (operationBytes != null) {
-            this.operationBytes = operationBytes.clone();
-        }
-        else {
-            this.operationBytes = null;
-        }
-        this.operationString = operationString;
-        adhocDDLStmts = null;
+        this.ccParams = ccParams;
         this.replayHashOverride = replayHashOverride;
         this.replayTxnId = replayTxnId;
         this.replayUniqueId = replayUniqeuId;
@@ -83,10 +92,9 @@ public class CatalogChangeWork extends AsyncCompilerWork {
               adhocDDL.completionHandler,
               adhocDDL.user);
         // AsyncCompilerAgentHelper will fill in the current catalog bytes later.
-        this.operationBytes = null;
         // Ditto for deployment string
-        this.operationString = null;
-        this.adhocDDLStmts = adhocDDL.sqlStatements;
+        this.ccParams = new CatalogChangeParameters(adhocDDL.sqlStatements, null, null, null);
+
         this.replayHashOverride = null;
         this.replayTxnId = -1L;
         this.replayUniqueId = -1L;
@@ -95,5 +103,59 @@ public class CatalogChangeWork extends AsyncCompilerWork {
     public boolean isForReplay()
     {
         return replayHashOverride != null;
+    }
+
+    public static CatalogChangeParameters fromParams(String procName, Object[] paramArray) {
+        if (paramArray == null) return null;
+
+        String[] ddlStmts = null;
+        String jarIdentifier = null;
+        byte[] catalogBytes = null;
+        String operationString = null;
+
+        // default catalogBytes to null, when passed along, will tell the
+        // catalog change planner that we want to use the current catalog.
+        if ("@UpdateApplicationCatalog".equals(procName) || "@UpdateClasses".equals(procName)) {
+            Object catalogObj = paramArray[0];
+            if (catalogObj != null) {
+                if (catalogObj instanceof String) {
+                    // treat an empty string as no catalog provided
+                    String catalogString = (String) catalogObj;
+                    if (!catalogString.isEmpty()) {
+                        catalogBytes = Encoder.hexDecode(catalogString);
+                    }
+                } else if (catalogObj instanceof byte[]) {
+                    // treat an empty array as no catalog provided
+                    byte[] catalogArr = (byte[]) catalogObj;
+                    if (catalogArr.length != 0) {
+                        catalogBytes = catalogArr;
+                    }
+                }
+            }
+            operationString = (String) paramArray[1];
+        }
+        else if ("@UpdateApplication".equals(procName)) {
+            // input parameters has been checked
+            String sql = null;
+            if (paramArray[0] != null) {
+                sql = (String) paramArray[0];
+            }
+            // TODO(xin): SQL String to String[] stmts
+            ddlStmts = new String[]{sql};
+
+            if (paramArray[1] != null) {
+                @SuppressWarnings("unchecked")
+                List<Pair<String, byte[]>> jarInfoList = (List<Pair<String, byte[]>>) paramArray[1];
+                Pair<String, byte[]> jarInfo = jarInfoList.iterator().next();
+                jarIdentifier = jarInfo.getFirst();
+                catalogBytes = jarInfo.getSecond();
+            }
+            if (paramArray[2] != null) {
+                // classes delete pattern strings
+                operationString = (String) paramArray[2];
+            }
+        }
+
+        return new CatalogChangeParameters(ddlStmts, jarIdentifier, catalogBytes, operationString);
     }
 }

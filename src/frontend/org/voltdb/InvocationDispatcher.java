@@ -418,10 +418,13 @@ public final class InvocationDispatcher {
             }
             final boolean useDdlSchema = catalogContext.cluster.getUseddlschema();
             if ("@UpdateApplicationCatalog".equals(procName)) {
-                return dispatchUpdateApplicationCatalog(task, handler, ccxn, user, useDdlSchema);
+                return dispatchUpdateApplicationCatalog(task, useDdlSchema, ccxn, user, handler.isAdmin());
             }
             else if ("@UpdateClasses".equals(procName)) {
-                return dispatchUpdateApplicationCatalog(task, handler, ccxn, user, useDdlSchema);
+                return dispatchUpdateApplicationCatalog(task, useDdlSchema, ccxn, user, handler.isAdmin());
+            }
+            else if ("@UpdateApplication".equals(procName)) {
+                return dispatchUpdateApplicationCatalog(task, useDdlSchema, ccxn, user, handler.isAdmin());
             }
             else if ("@SnapshotSave".equals(procName)) {
                 m_snapshotDaemon.requestUserSnapshot(task, ccxn);
@@ -1010,51 +1013,52 @@ public final class InvocationDispatcher {
         return pCol.getType();
     }
 
-    final void dispatchUpdateApplicationCatalog(StoredProcedureInvocation task,
-            boolean useDdlSchema, Connection ccxn, AuthSystem.AuthUser user, boolean isAdmin)
-    {
-        ParameterSet params = task.getParams();
-        final Object [] paramArray = params.toArray();
-        // default catalogBytes to null, when passed along, will tell the
-        // catalog change planner that we want to use the current catalog.
-        byte[] catalogBytes = null;
-        Object catalogObj = paramArray[0];
-        if (catalogObj != null) {
-            if (catalogObj instanceof String) {
-                // treat an empty string as no catalog provided
-                String catalogString = (String) catalogObj;
-                if (!catalogString.isEmpty()) {
-                    catalogBytes = Encoder.hexDecode(catalogString);
-                }
-            } else if (catalogObj instanceof byte[]) {
-                // treat an empty array as no catalog provided
-                byte[] catalogArr = (byte[]) catalogObj;
-                if (catalogArr.length != 0) {
-                    catalogBytes = catalogArr;
-                }
-            }
+    private static String checkParametersForUpdateApplication(final Object[] paramArray) {
+        if (paramArray.length != 3) {
+            return "Expect 3 parameters, but received " + paramArray.length;
         }
-        String deploymentString = (String) paramArray[1];
-        LocalObjectMessage work = new LocalObjectMessage(
-                new CatalogChangeWork(
-                    m_siteId,
-                    task.clientHandle, ccxn.connectionId(), ccxn.getHostnameAndIPAndPort(),
-                    isAdmin, ccxn, catalogBytes, deploymentString,
-                    task.getProcName(),
-                    VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
-                    useDdlSchema,
-                    m_adhocCompletionHandler, user,
-                    null, -1L, -1L
-                    ));
 
-        m_mailbox.send(m_plannerSiteId, work);
+        // TODO(xin): check parameters
+        if (paramArray[0] != null && paramArray[0] instanceof String == false) {
+            return "Expect first parameter to be String type, but received ";
+        }
+        return null;
     }
 
-    private final ClientResponseImpl dispatchUpdateApplicationCatalog(StoredProcedureInvocation task,
-            InvocationClientHandler handler, Connection ccxn, AuthSystem.AuthUser user,
-            boolean useDdlSchema)
+    final ClientResponseImpl dispatchUpdateApplicationCatalog(StoredProcedureInvocation task,
+            boolean useDdlSchema, Connection ccxn, AuthSystem.AuthUser user, boolean isAdmin)
     {
-        dispatchUpdateApplicationCatalog(task, useDdlSchema, ccxn, user, handler.isAdmin());
+        String procName = task.getProcName();
+        CatalogChangeWork work = null;
+        final Object[] paramArray = task.getParams().toArray();
+
+        if ("@UpdateApplication".equals(procName)) {
+            String errorMsg = checkParametersForUpdateApplication(paramArray);
+            if (errorMsg != null) {
+                return new ClientResponseImpl(ClientResponseImpl.GRACEFUL_FAILURE,
+                        new VoltTable[0], errorMsg, task.clientHandle);
+            }
+        }
+        CatalogChangeWork.CatalogChangeParameters param =  CatalogChangeWork.fromParams(procName, paramArray);
+
+        work = new CatalogChangeWork(
+                m_siteId,
+                task.clientHandle,
+                ccxn.connectionId(),
+                ccxn.getHostnameAndIPAndPort(),
+                isAdmin,
+                ccxn,
+                param,
+                task.getProcName(),
+                VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
+                useDdlSchema,
+                m_adhocCompletionHandler, user,
+                null, -1L, -1L
+                );
+
+        m_mailbox.send(m_plannerSiteId, new LocalObjectMessage(work));
+
+        // null response
         return null;
     }
 
@@ -1389,7 +1393,8 @@ public final class InvocationDispatcher {
 
             VoltDB.instance().getClientInterface().bindAdapter(alternateAdapter, null);
 
-            dispatchUpdateApplicationCatalog(catalogUpdateTask, alternateHandler, alternateAdapter, user, false);
+            dispatchUpdateApplicationCatalog(catalogUpdateTask, false, alternateAdapter, user,
+                     alternateHandler.isAdmin());
 
         } catch (JSONException e) {
             return unexpectedFailureResponse("Unable to parse parameters.", task.clientHandle);
