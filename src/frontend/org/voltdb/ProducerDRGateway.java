@@ -40,6 +40,13 @@ public interface ProducerDRGateway {
             m_nodes = nodes;
         }
 
+        @Override
+        public String toString() {
+            return "MeshMemberInfo [m_clusterId=" + m_clusterId + ", m_creationTime=" + m_creationTime
+                    + ", m_protocolVersion=" + m_protocolVersion + ", m_partitionCount=" + m_partitionCount
+                    + ", m_nodes=" + m_nodes + "]";
+        }
+
         public MeshMemberInfo(byte clusterId,  long creationTime, List<HostAndPort> nodes) {
             this(clusterId, creationTime, 0, 0, nodes);
         }
