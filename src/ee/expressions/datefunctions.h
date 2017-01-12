@@ -868,8 +868,9 @@ template<> inline NValue NValue::callUnary<FUNC_VOLT_IS_VALID_TIMESTAMP>() const
     if (isNull()) {
         return getNullValue();
     }
-    int64_t timestamp_number = castAsBigIntAndGetValue();
-    return getBooleanValue(timestampIsValid(timestamp_number));
+    // All timestamps should be valid in 7.0.
+    assert(timestampIsValid(castAsBigIntAndGetValue()));
+    return getBooleanValue(true);
 }
 
 

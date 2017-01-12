@@ -39,6 +39,7 @@ import org.voltdb.client.NoConnectionsException;
 import org.voltdb.client.ProcCallException;
 import org.voltdb.client.ProcedureCallback;
 import org.voltdb.compiler.VoltProjectBuilder;
+import org.voltdb.types.TimestampType;
 import org.voltdb_testprocs.regressionsuites.failureprocs.BadParamTypesForTimestamp;
 import org.voltdb_testprocs.regressionsuites.fixedsql.GotBadParamCountsInJava;
 
@@ -1128,17 +1129,19 @@ public class TestFunctionsForVoltDBSuite extends RegressionSuite {
                 fail();
             }
 
-            cr = client.callProcedure(proc, 1371808830000L, 1);
+            final long maxSec = TimestampType.getMaxTimestamp().getUSecSinceEpoch() / 1000000;
+            String diagnostic = proc + " produced unexpected output";
+            cr = client.callProcedure(proc, maxSec, 1);
             assertEquals(ClientResponse.SUCCESS, cr.getStatus());
             result = cr.getResults()[0];
             assertEquals(1, result.getRowCount());
             assertTrue(result.advanceRow());
             if (proc == "TO_TIMESTAMP_SECOND" || proc == "FROM_UNIXTIME") {
-                assertEquals(1371808830000000000L, result.getTimestampAsLong(0));
+                assertEquals(diagnostic, maxSec * 1000000, result.getTimestampAsLong(0));
             } else if (proc == "TO_TIMESTAMP_MILLIS" || proc == "TO_TIMESTAMP_MILLISECOND") {
-                assertEquals(1371808830000000L, result.getTimestampAsLong(0));
+                assertEquals(diagnostic, maxSec * 1000, result.getTimestampAsLong(0));
             } else if (proc == "TO_TIMESTAMP_MICROS" || proc == "TO_TIMESTAMP_MICROSECOND") {
-                assertEquals(1371808830000L, result.getTimestampAsLong(0));
+                assertEquals(diagnostic, maxSec, result.getTimestampAsLong(0));
             } else {
                 fail();
             }
@@ -1168,21 +1171,6 @@ public class TestFunctionsForVoltDBSuite extends RegressionSuite {
             assertNotNull(ex);
             assertTrue((ex.getMessage().contains("PlanningErrorException")));
             assertTrue((ex.getMessage().contains("TRUNCATE")));
-        }
-
-        // Test date before Gregorian calendar beginning.
-        cr = client.callProcedure("P2.insert", 0, Timestamp.valueOf("1582-03-06 13:56:40.123456"));
-        assertEquals(ClientResponse.SUCCESS, cr.getStatus());
-
-        ex = null;
-        try {
-            cr = client.callProcedure("TRUNCATE", 0);
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-            ex = e;
-        } finally {
-            assertNotNull(ex);
-            assertTrue((ex.getMessage().contains("SQL ERROR")));
         }
 
         // Test Timestamp Null value
@@ -2947,11 +2935,7 @@ public class TestFunctionsForVoltDBSuite extends RegressionSuite {
         // Insert some valid and invalid data.
         Client client = getClient();
         ClientResponse cr;
-        VoltTable vt;
-        cr = client.callProcedure("P2.insert", 100, GREGORIAN_EPOCH - 1000);
-        assertEquals(ClientResponse.SUCCESS, cr.getStatus());
-        cr = client.callProcedure("P2.insert", 101, NYE9999 + 1000);
-        assertEquals(ClientResponse.SUCCESS, cr.getStatus());
+
         cr = client.callProcedure("P2.insert", 200, GREGORIAN_EPOCH);
         assertEquals(ClientResponse.SUCCESS, cr.getStatus());
         cr = client.callProcedure("P2.insert", 201, 0);
@@ -2963,9 +2947,8 @@ public class TestFunctionsForVoltDBSuite extends RegressionSuite {
         doTestTimestampLimit("GET_MIN_VALID_TIMESTAMP", GREGORIAN_EPOCH);
         doTestTimestampLimit("GET_MAX_VALID_TIMESTAMP", NYE9999);
 
-        // Test IS_VALID_TIMESTAMP too low.
-        doTestIsValidTimestamp(100, false);
-        doTestIsValidTimestamp(101, false);
+        // IS_VALID_TIMESTAMP must return true in version 7.0,
+        // since it's not possible to create timestamps outside the valid range.
         doTestIsValidTimestamp(200, true);
         doTestIsValidTimestamp(201, true);
         doTestIsValidTimestamp(202, true);

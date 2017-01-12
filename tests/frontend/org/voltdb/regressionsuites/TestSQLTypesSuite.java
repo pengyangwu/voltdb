@@ -256,9 +256,9 @@ public class TestSQLTypesSuite extends RegressionSuite {
         new Column("A_TIMESTAMP", VoltType.TIMESTAMP, false,
                    VoltType.NULL_TIMESTAMP,
                    new TimestampType(600000),
-                   new TimestampType(Long.MIN_VALUE + 1),
+                   TimestampType.getMinTimestamp(),
                    new TimestampType(),
-                   new TimestampType(Long.MAX_VALUE)),
+                   TimestampType.getMaxTimestamp()),
         new Column("A_INLINE_S1", VoltType.STRING, false,
                    VoltType.NULL_STRING_OR_VARBINARY,
                    new String("abcd"),
@@ -546,8 +546,11 @@ public class TestSQLTypesSuite extends RegressionSuite {
 
         Random rn = new Random();
 
+        // This loop picks random timestamps between 1583 and 1970.
+        final long minUsec = TimestampType.getMinTimestamp().getUSecSinceEpoch();
+        final long maxUsec = 0;
         for (int i = 0; i < 100; ++i) {
-            long ts = rn.nextLong();
+            long ts = (Math.abs(rn.nextLong()) % (maxUsec - minUsec)) + minUsec;
             long[] timestampValues = {
                     ts, // random
                     ts / 1000 * 1000, // even milliseconds
