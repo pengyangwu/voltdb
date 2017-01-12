@@ -39,6 +39,10 @@ public class TimestampType implements JSONString, Comparable<TimestampType> {
             + "(" + MIN_VALID_TIMESTAMP + " to " + MAX_VALID_TIMESTAMP + ").";
 
     private static void validateRange(long usecSinceEpoch) {
+        if (usecSinceEpoch == Long.MIN_VALUE) {
+            // The null value.
+            return;
+        }
         if (usecSinceEpoch < GREGORIAN_EPOCH || usecSinceEpoch > NYE9999) {
             throw new IllegalArgumentException(OUT_OF_RANGE_ERROR_MSG);
         }
@@ -102,6 +106,18 @@ public class TimestampType implements JSONString, Comparable<TimestampType> {
             throw new IllegalArgumentException("Can't convert from String to Date with fractional milliseconds");
         }
         return sqlTS.getTime();
+    }
+
+    public static TimestampType getMinTimestamp() {
+        return new TimestampType(GREGORIAN_EPOCH);
+    }
+
+    public static TimestampType getMaxTimestamp() {
+        return new TimestampType(NYE9999);
+    }
+
+    public static TimestampType getNullTimestamp() {
+        return new TimestampType(Long.MIN_VALUE);
     }
 
     /**

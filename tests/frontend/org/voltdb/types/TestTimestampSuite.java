@@ -142,6 +142,17 @@ public class TestTimestampSuite {
             // East of UTC we'll see the formatting exception that we got above.
             expectException("10000-01-01 00:00:00.000", "timestamp value is outside of the supported range");
         }
+    }
 
+    @Test
+    public void testFactoryMethods() {
+        TimestampType tt = TimestampType.getMaxTimestamp();
+        assertEquals(NYE9999, tt.getUSecSinceEpoch());
+
+        tt = TimestampType.getMinTimestamp();
+        assertEquals(GREGORIAN_EPOCH, tt.getUSecSinceEpoch());
+
+        tt = TimestampType.getNullTimestamp();
+        assertEquals(Long.MIN_VALUE, tt.getUSecSinceEpoch());
     }
 }

@@ -943,7 +943,7 @@ public class ProcedureRunner {
                 args[ii] = VoltType.NULL_FLOAT;
                 break;
             case TIMESTAMP:
-                args[ii] = new TimestampType(Long.MIN_VALUE);
+                args[ii] = TimestampType.getNullTimestamp();
                 break;
             case STRING:
                 args[ii] = VoltType.NULL_STRING_OR_VARBINARY;
