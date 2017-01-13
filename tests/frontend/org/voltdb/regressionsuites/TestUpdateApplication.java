@@ -23,6 +23,8 @@
 
 package org.voltdb.regressionsuites;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -33,7 +35,9 @@ import org.voltdb.ClientResponseImpl;
 import org.voltdb.VoltDB;
 import org.voltdb.VoltDB.Configuration;
 import org.voltdb.VoltTable;
+import org.voltdb.VoltTableTestHelpers;
 import org.voltdb.client.ClientResponse;
+import org.voltdb.client.ProcCallException;
 import org.voltdb.compiler.VoltCompiler;
 import org.voltdb.compiler.VoltProjectBuilder;
 import org.voltdb.utils.InMemoryJarfile;
@@ -85,25 +89,26 @@ public class TestUpdateApplication extends AdhocDDLTestBase {
             startSystem(config);
 
             ClientResponse resp;
-//            resp = m_client.callProcedure("@SystemCatalog", "CLASSES");
-//            System.out.println(resp.getResults()[0]);
-//            // New cluster, you're like summer vacation...
-//            assertEquals(0, resp.getResults()[0].getRowCount());
-//            assertFalse(VoltTableTestHelpers.moveToMatchingRow(resp.getResults()[0], "CLASS_NAME",
-//                        PROC_CLASSES[0].getCanonicalName()));
-//            boolean threw = false;
-//            try {
-//                resp = m_client.callProcedure(PROC_CLASSES[0].getSimpleName());
-//            }
-//            catch (ProcCallException pce) {
-//                assertTrue(pce.getMessage().contains("was not found"));
-//                threw = true;
-//            }
-//            assertTrue(threw);
+            resp = m_client.callProcedure("@SystemCatalog", "CLASSES");
+            System.out.println(resp.getResults()[0]);
+            // New cluster, you're like summer vacation...
+            assertEquals(0, resp.getResults()[0].getRowCount());
+            assertFalse(VoltTableTestHelpers.moveToMatchingRow(resp.getResults()[0], "CLASS_NAME",
+                        PROC_CLASSES[0].getCanonicalName()));
+            boolean threw = false;
+            try {
+                resp = m_client.callProcedure(PROC_CLASSES[0].getSimpleName());
+            }
+            catch (ProcCallException pce) {
+                assertTrue(pce.getMessage().contains("was not found"));
+                threw = true;
+            }
+            assertTrue(threw);
 
             // With the third extra DDL statement
-            String stmt = "load classes updateclasses.jar;\n";
-            stmt += "create procedure from class " + PROC_CLASSES[0].getCanonicalName() + ";\n";
+            //String stmt = "load classes updateclasses.jar;\n";
+            String stmt = "";
+            stmt += "create procedure from class " + PROC_CLASSES[0].getCanonicalName() + "";
 
             String[] jarIdentifiers = new String[]{"xxx.jar"};
             byte[][] jarBytes = new byte[1][];
@@ -115,16 +120,17 @@ public class TestUpdateApplication extends AdhocDDLTestBase {
             resp = m_client.callProcedure("@SystemCatalog", "CLASSES");
             VoltTable results = resp.getResults()[0];
             System.out.println(results);
-//            assertEquals(3, results.getRowCount());
-//            assertTrue(VoltTableTestHelpers.moveToMatchingRow(results, "CLASS_NAME",
-//                        PROC_CLASSES[0].getCanonicalName()));
-//            assertEquals(1L, results.getLong("VOLT_PROCEDURE"));
-//            assertEquals(1L, results.getLong("ACTIVE_PROC"));
-//            // Verify the new class as a stored procedure
-//            resp = m_client.callProcedure(PROC_CLASSES[0].getSimpleName());
-//            assertEquals(ClientResponse.SUCCESS, resp.getStatus());
-//            results = resp.getResults()[0];
-//            assertEquals(10L, results.asScalarLong());
+            assertEquals(3, results.getRowCount());
+            assertTrue(VoltTableTestHelpers.moveToMatchingRow(results, "CLASS_NAME",
+                        PROC_CLASSES[0].getCanonicalName()));
+            assertEquals(1L, results.getLong("VOLT_PROCEDURE"));
+            assertEquals(1L, results.getLong("ACTIVE_PROC"));
+
+            // Verify the new class as a stored procedure
+            resp = m_client.callProcedure(PROC_CLASSES[0].getSimpleName());
+            assertEquals(ClientResponse.SUCCESS, resp.getStatus());
+            results = resp.getResults()[0];
+            assertEquals(10L, results.asScalarLong());
         }
         finally {
             teardownSystem();

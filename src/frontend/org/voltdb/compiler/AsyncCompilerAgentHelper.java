@@ -20,6 +20,7 @@ package org.voltdb.compiler;
 import java.io.IOException;
 import java.util.Map.Entry;
 
+import org.hsqldb_voltpatches.HSQLInterface;
 import org.voltcore.logging.VoltLogger;
 import org.voltcore.utils.Pair;
 import org.voltdb.CatalogContext;
@@ -40,9 +41,11 @@ public class AsyncCompilerAgentHelper
 {
     private static final VoltLogger compilerLog = new VoltLogger("COMPILER");
     private final LicenseApi m_licenseApi;
+    HSQLInterface m_hsql = null;
 
     public AsyncCompilerAgentHelper(LicenseApi licenseApi) {
         m_licenseApi = licenseApi;
+        m_hsql = HSQLInterface.loadHsqldb();
     }
 
     public CatalogChangeResult prepareApplicationCatalogDiff(CatalogChangeWork work) {
@@ -98,8 +101,6 @@ public class AsyncCompilerAgentHelper
                 deploymentString = null;
             }
             else if ("@UpdateApplication".equals(work.invocationName)) {
-            	// TODO (xin): "load classes xxx.jar" is the first stmt
-
                 // provided operationString is really a String with class patterns to delete,
                 // provided newCatalogJar is the jarfile with the new classes
                 if (ccParam.operationBytes != null) {
@@ -350,10 +351,14 @@ public class AsyncCompilerAgentHelper
         VoltCompiler compiler = new VoltCompiler();
 
         if (stmts == null) {
-            compiler.compileInMemoryJarfile(jarfile);
+            compiler.compileJarForClassChangesOnly(jarfile);
         } else {
             String newDDL = combineStmts(stmts, false);
-            compiler.compileInMemoryJarfileWithNewDDL(jarfile, newDDL, oldCatalog);
+            System.out.println("---new DDL:\n" + newDDL);
+            // assume newDDl only contains procedure changes: create/drop, etc.
+            compiler.compileJarForClassChangesOnly(jarfile, newDDL, oldCatalog, m_hsql);
+
+//            compiler.compileInMemoryJarfileWithNewDDL(jarfile, newDDL, oldCatalog);
         }
 
         return jarfile;

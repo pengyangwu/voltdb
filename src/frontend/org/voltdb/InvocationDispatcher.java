@@ -1018,10 +1018,15 @@ public final class InvocationDispatcher {
             return "Expect 4 parameters, but received " + paramArray.length;
         }
 
-        // TODO(xin): check parameters
-        if (paramArray[0] != null && paramArray[0] instanceof String == false) {
-            return "Expect first parameter to be String type, but received ";
+        String[] types = {"java.lang.String", "java.lang.String[]", "byte[][]", "java.lang.String"};
+        for (int i = 0; i < types.length; i++) {
+            String type = types[i];
+            if (paramArray[i] != null && ! type.equals(paramArray[i].getClass().getTypeName())) {
+                return String.format("Expect %d parameter to be %s, but received %s",
+                        i, type, paramArray[i].getClass().getTypeName());
+            }
         }
+
         return null;
     }
 
