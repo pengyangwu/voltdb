@@ -217,9 +217,11 @@ public class SocketJoiner {
                     //exponential back off with a salt to avoid collision. Max is 5 minutes.
                     retryInterval = Math.min(retryInterval * 2, maxWait) + salt.nextInt(RETRY_INTERVAL_SALT);
 
-                    //Reset waiting time. The exponential back-off can be too much for simultaneous multiple node rejoining.
-                    //All later rejoining hosts may wait for (maxWait + salt) seconds without sending another rejoining request even through
-                    //no rejoining is in progress in the cluster.
+                    //Rejoining is processed one at a time. Later rejoining hosts may wait for (maxWait + salt) seconds without sending another rejoining request
+                    //even through no rejoining is in progress in the cluster. For example, there are 4 rejoining nodes. Node 1 may take over 5 min to be completed.
+                    //Then node 2 to 4 detect that node 1 is still rejoning right before it is done.
+                    //They then will wait 5 min + salt before sending another rejoining request. All the following rejoining requests are sent after 5 min + salt.
+                    //Reset waiting time to avoid over waiting in the case of multiple node rejoining.
                     if (retryInterval > maxWait) {
                         retryInterval = RETRY_INTERVAL;
                     }
